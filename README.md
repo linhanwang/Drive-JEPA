@@ -3,6 +3,8 @@
   <h1 align="center">Drive-JEPA: Video JEPA Meets Multimodal Trajectory
 Distillation for End-to-End Driving</h1>
 
+[arxiv](https://arxiv.org/abs/2601.22032)
+
 
 </div>
 
