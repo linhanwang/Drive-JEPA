@@ -60,6 +60,7 @@ class DriveJEPAModel(nn.Module):
         self._status_encoding = nn.Linear(4 + 2 + 2, tf_d_model)
 
         num_poses = trajectory_sampling.num_poses
+        # TODO: petr position_embedding
 
         self._keyval_embedding = nn.Embedding(num_keyval, tf_d_model)  # 8x8 feature grid + trajectory
         self._query_embedding = nn.Embedding(num_poses, tf_d_model)
@@ -73,7 +74,7 @@ class DriveJEPAModel(nn.Module):
             dropout=tf_dropout,
             batch_first=True,
         )
-        self._trajectory_head = DriveJEPATrajectoryHead(num_poses, tf_d_ffn, tf_d_model)
+        self._trajectory_head = TrajectoryHead(num_poses, tf_d_ffn, tf_d_model)
         self.transform = self.make_transform()
 
     def make_transform(self):
@@ -116,7 +117,7 @@ class DriveJEPAModel(nn.Module):
         return trajectory
 
 
-class DriveJEPATrajectoryHead(nn.Module):
+class TrajectoryHead(nn.Module):
     """Trajectory prediction head."""
 
     def __init__(self, num_poses: int, d_ffn: int, d_model: int):
@@ -126,7 +127,7 @@ class DriveJEPATrajectoryHead(nn.Module):
         :param d_ffn: dimensionality of feed-forward network
         :param d_model: input dimensionality
         """
-        super(DriveJEPATrajectoryHead, self).__init__()
+        super(TrajectoryHead, self).__init__()
 
         self._num_poses = num_poses
         self._d_model = d_model
@@ -143,3 +144,4 @@ class DriveJEPATrajectoryHead(nn.Module):
         poses = self._mlp(object_queries).reshape(-1, self._num_poses, StateSE2Index.size())
         poses[..., StateSE2Index.HEADING] = poses[..., StateSE2Index.HEADING].tanh() * np.pi
         return {"trajectory": poses}
+

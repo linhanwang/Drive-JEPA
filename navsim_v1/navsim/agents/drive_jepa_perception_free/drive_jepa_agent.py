@@ -3,26 +3,24 @@ from typing import Any, Dict, List, Optional, Union
 import torch
 from nuplan.planning.simulation.trajectory.trajectory_sampling import TrajectorySampling
 from torch.optim import Optimizer
-from torch.optim.lr_scheduler import LRScheduler
+from torch.optim.lr_scheduler import CosineAnnealingLR, LRScheduler
 
 from navsim.agents.abstract_agent import AbstractAgent
-from navsim.agents.drive_jepa_perception_free.drive_jepa_features import (
-    DriveJEPAFeatureBuilder,
-    DriveJEPAFeatureDIBuilder,
-)
-from navsim.agents.drive_jepa_perception_free.drive_jepa_model import DriveJEPAModel
-from navsim.common.dataclasses import Scene, SensorConfig
+from navsim.agents.drive_jepa_perception_free_b.drive_jepa_features import DriveJEPAFeatureBuilder, DriveJEPAFeatureDIBuilder 
+from navsim.agents.drive_jepa_perception_free_b.drive_jepa_model import DriveJEPAModel
+from navsim.common.dataclasses import AgentInput, Scene, SensorConfig
 from navsim.planning.training.abstract_feature_target_builder import AbstractFeatureBuilder, AbstractTargetBuilder
 
 
-class DriveJEPATrajectoryTargetBuilder(AbstractTargetBuilder):
-    """Input target builder of DriveJEPA."""
+class TrajectoryTargetBuilder(AbstractTargetBuilder):
+    """Input target builder of LAW."""
 
     def __init__(self, trajectory_sampling: TrajectorySampling):
         """
         Initializes the target builder.
         :param trajectory_sampling: trajectory sampling specification.
         """
+
         self._trajectory_sampling = trajectory_sampling
 
     def get_unique_name(self) -> str:
@@ -56,8 +54,9 @@ class DriveJEPAAgent(AbstractAgent):
         double_image: bool = False,
     ):
         """
-        Initializes the agent interface for DriveJEPA.
+        Initializes the agent interface for EgoStatusMLP.
         :param trajectory_sampling: trajectory sampling specification.
+        :param hidden_layer_dim: dimensionality of hidden layer.
         :param lr: learning rate during training.
         :param checkpoint_path: optional checkpoint path as string, defaults to None
         """
@@ -107,7 +106,7 @@ class DriveJEPAAgent(AbstractAgent):
 
     def get_target_builders(self) -> List[AbstractTargetBuilder]:
         """Inherited, see superclass."""
-        return [DriveJEPATrajectoryTargetBuilder(trajectory_sampling=self._trajectory_sampling)]
+        return [TrajectoryTargetBuilder(trajectory_sampling=self._trajectory_sampling)]
 
     def get_feature_builders(self) -> List[AbstractFeatureBuilder]:
         """Inherited, see superclass."""
@@ -119,8 +118,8 @@ class DriveJEPAAgent(AbstractAgent):
     def forward(self, features: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         """Inherited, see superclass."""
         if self._double_image:
-            cam_f_2 = features["camera_feature_2"]
-            cam_f_1 = features["camera_feature_1"]
+            cam_f_2 = features['camera_feature_2']
+            cam_f_1 = features['camera_feature_1']
             cam_feature = torch.cat([cam_f_2[:, :, None], cam_f_1[:, :, None]], dim=2)
             return self._model(cam_feature, features["status_feature"])
         else:
@@ -130,8 +129,38 @@ class DriveJEPAAgent(AbstractAgent):
         self, features: Dict[str, torch.Tensor], targets: Dict[str, torch.Tensor], predictions: Dict[str, torch.Tensor]
     ) -> torch.Tensor:
         """Inherited, see superclass."""
-        return torch.nn.functional.l1_loss(predictions["trajectory"], targets["trajectory"])
+        
+        pred, gt = predictions["trajectory"], targets["trajectory"]
+        return l1_length_normalized_loss(pred, gt, alpha=5.0)
+        # l1_loss = l1_length_normalized_loss(pred, gt, alpha=5.0)
+        # lateral_loss = torch.mean(lateral_distance_pred_to_gt(pred[:, :, :2], gt[:, :, :2]))
+        # loss = l1_loss + 0.5 * lateral_loss
+        # return {'loss': loss, 'l1_loss': l1_loss, 'lateral_loss': lateral_loss}
+        # return torch.nn.functional.l1_loss(predictions["trajectory"], targets["trajectory"])
 
     def get_optimizers(self) -> Union[Optimizer, Dict[str, Union[Optimizer, LRScheduler]]]:
         """Inherited, see superclass."""
         return torch.optim.Adam(self._model.parameters(), lr=self._lr)
+
+
+def l1_length_normalized_loss(pred, gt, alpha=1.0, eps=1e-6):
+    """
+    pred, gt: [B, N, 3]  (x, y, yaw)
+    Normalizes L1 loss by GT trajectory length.
+    """
+    # Mean L1 per sample
+    per_sample_l1 = (pred - gt).abs().mean(dim=[1, 2])  # [B]
+
+    # Compute GT arc length in XY
+    dxy = gt[:, 1:, :2] - gt[:, :-1, :2]                # [B, N-1, 2]
+    arc_len = torch.linalg.norm(dxy, dim=-1).sum(dim=1) # [B]
+    
+    # Compute weights: inverse of (1 + length)
+    w = 1.0 / (alpha + arc_len)
+
+    # Normalize weights so avg weight ≈ 1
+    w = w * (w.numel() / (w.sum() + eps))
+
+    # Weighted mean loss
+    loss = (w * per_sample_l1).mean()
+    return loss
