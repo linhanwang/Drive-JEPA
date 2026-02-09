@@ -1,0 +1,22 @@
+hydra:
+  run:
+    dir: ${output_dir}
+  output_subdir: ${output_dir}/code/hydra           # Store hydra's config breakdown here for debugging
+  searchpath:                                       # Only <exp_dir> in these paths are discoverable
+    - pkg://navsim.planning.script.config.common 
+  job:
+    chdir: False
+
+defaults:
+  - default_common
+  - default_evaluation
+  - agent: navsim_agent
+  - _self_
+  - override train_test_split: navtest
+
+"team_name": ke # The team name
+"authors": ke_guo # The team members
+"email": u3006612@connect.hku.hk # email of the corresponding team member
+"institution": ntu # affiliation of the team
+"country": Singapore # country or region of the team, e.g. China
+

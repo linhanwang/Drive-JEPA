@@ -1,0 +1,21 @@
+_target_: navsim.agents.drive_jepa_perception_free.drive_jepa_agent.DriveJEPAAgent
+_convert_: 'all'
+
+trajectory_sampling:
+  _target_: nuplan.planning.simulation.trajectory.trajectory_sampling.TrajectorySampling
+  _convert_: 'all'
+  time_horizon: 4
+  interval_length: 0.5
+checkpoint_path: null
+pretrain_pt_path: null
+image_architecture: 'vit_large'
+tf_d_model: 256
+tf_d_ffn: 1024
+tf_num_layers: 3
+tf_num_head: 8
+tf_dropout: 0.0
+lr: 1e-4
+front_only: true 
+num_keyval: 257
+freeze_encoder: true 
+double_image: false 

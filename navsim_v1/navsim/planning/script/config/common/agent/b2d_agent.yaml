@@ -1,0 +1,9 @@
+_target_: navsim.agents.pad.pad_agent.PadAgent
+_convert_: 'all'
+
+config:
+  _target_: navsim.agents.pad.b2d_config.PadConfig
+  _convert_: 'all'
+
+checkpoint_path: ''
+lr: 1e-4
