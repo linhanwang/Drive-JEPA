@@ -6,8 +6,8 @@ from torch.optim import Optimizer
 from torch.optim.lr_scheduler import CosineAnnealingLR, LRScheduler
 
 from navsim.agents.abstract_agent import AbstractAgent
-from navsim.agents.drive_jepa_perception_free_b.drive_jepa_features import DriveJEPAFeatureBuilder, DriveJEPAFeatureDIBuilder 
-from navsim.agents.drive_jepa_perception_free_b.drive_jepa_model import DriveJEPAModel
+from navsim.agents.drive_jepa_perception_free.drive_jepa_features import DriveJEPAFeatureBuilder, DriveJEPAFeatureDIBuilder 
+from navsim.agents.drive_jepa_perception_free.drive_jepa_model import DriveJEPAModel
 from navsim.common.dataclasses import AgentInput, Scene, SensorConfig
 from navsim.planning.training.abstract_feature_target_builder import AbstractFeatureBuilder, AbstractTargetBuilder
 

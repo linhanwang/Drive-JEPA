@@ -3,6 +3,7 @@ import torch.nn as nn
 from einops import rearrange
 import yaml
 from vjepa2.evals.image_classification_frozen.modelcustom.vit_encoder import init_module
+import os
 
 from .grid_mask import GridMask
 from ..drive_jepa_config import DriveJEPAConfig
@@ -21,8 +22,7 @@ class ImgEncoder(nn.Module):
         self.use_grid_mask = True 
         
         image_architecture = "vit_large"
-        pretrain_pt_path = "/home/linhan/yinlin/projects/navsim_workspace/vjepa2_ckpts/vitl_merge_3dataset/e50.pt"
-        # pretrain_pt_path = "/home/linhan/yinlin/projects/navsim_workspace/vjepa2_ckpts/vitl.pt"
+        pretrain_pt_path = f"{os.getenv('NAVSIM_EXP_ROOT')}/Drive-JEPA-cache/vitl_merge_3dataset_e50.pt"
         fname = "./vjepa2/configs/eval/vitl/in1k.yaml"
         with open(fname, "r") as y_file:
             params = yaml.load(y_file, Loader=yaml.FullLoader)

@@ -1,11 +1,12 @@
 #!/bin/bash
-source scripts/env.sh
+
+export NAVSIM_DEVKIT_ROOT=$(pwd)
 
 TRAIN_TEST_SPLIT=navtrain
 
 torchrun --standalone --nproc_per_node=gpu $NAVSIM_DEVKIT_ROOT/navsim/planning/script/run_training.py \
-        agent=drive_jepa_perception_free_b_agent \
-        agent.pretrain_pt_path="/home/linhan/yinlin/projects/navsim_workspace/vjepa2_ckpts/vitl_merge_3dataset/e50.pt" \
+        agent=drive_jepa_perception_free_agent \
+        agent.pretrain_pt_path="${NAVSIM_EXP_ROOT}/Drive-JEPA-cache/vitl_merge_3dataset_e50.pt" \
         agent.image_architecture="vit_large" \
         agent.lr=1e-4 \
         agent.tf_dropout=0.0 \
@@ -20,6 +21,6 @@ torchrun --standalone --nproc_per_node=gpu $NAVSIM_DEVKIT_ROOT/navsim/planning/s
         trainer.checkpoint.mode=min \
         trainer.params.max_epochs=40 \
         trainer.params.precision=bf16  \
-        cache_path="/scratch/linhan/train_drive_jepa_perception_free_b_cache_v1/" \
+        cache_path="${NAVSIM_EXP_ROOT}/train_drive_jepa_perception_free_cache" \
         use_cache_without_dataset=True  \
         force_cache_computation=False 

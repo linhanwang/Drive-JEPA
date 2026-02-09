@@ -1,4 +1,4 @@
-_target_: navsim.agents.vjepa.vjepa_agent.VJEPAAgent
+_target_: navsim.agents.drive_jepa_perception_free.drive_jepa_agent.DriveJEPAAgent
 _convert_: 'all'
 
 trajectory_sampling:

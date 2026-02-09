@@ -1,7 +1,9 @@
 #!/bin/bash
-source scripts/env.sh
 
-CHECKPOINT='/home/linhan/projects/navsim_workspace/exp/ke/train_ipad_vjepa_baseline_p32_topk_anchors_4/12.09_19.43/checkpoints/best_epoch\=14.ckpt'
+export NAVSIM_DEVKIT_ROOT=$(pwd)
+
+CHECKPOINT='/home/linhan/navsim_workspace/exp/Drive-JEPA-cache/drive_jepa_perception_based_agent_vitl.ckpt'
+# Or you can use the ckpt trained by yourself.
 
 TRAIN_TEST_SPLIT=navtest
 
@@ -13,5 +15,4 @@ worker=single_machine_thread_pool \
 worker.max_workers=4 \
 worker.use_process_pool=true \
 agent.checkpoint_path=$CHECKPOINT \
-experiment_name=eval_test
-# experiment_name=eval_train_ipad_vjepa_p32_topk_anchors_4_e14
+experiment_name=eval_reproduce_drive_jepa_perception_based_agent

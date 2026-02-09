@@ -1,6 +1,6 @@
 #!/bin/bash
-source scripts/env.sh
 
+export NAVSIM_DEVKIT_ROOT=$(pwd)
 TRAIN_TEST_SPLIT=navtrain
 
 torchrun --standalone --nproc_per_node=gpu $NAVSIM_DEVKIT_ROOT/navsim/planning/script/run_training.py \
@@ -10,6 +10,6 @@ torchrun --standalone --nproc_per_node=gpu $NAVSIM_DEVKIT_ROOT/navsim/planning/s
         train_test_split=$TRAIN_TEST_SPLIT \
         trainer.params.max_epochs=20 \
         trainer.params.strategy=ddp_find_unused_parameters_true \
-        cache_path="${NAVSIM_EXP_ROOT}/train_drive_jepa_perception_based_cache_v1/" \
+        cache_path="${NAVSIM_EXP_ROOT}/train_drive_jepa_perception_based_cache/" \
         use_cache_without_dataset=True  \
         force_cache_computation=False 

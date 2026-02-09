@@ -15,9 +15,6 @@ from pytorch_lightning.callbacks import ModelCheckpoint
 from navsim.common.dataloader import MetricCacheLoader
 from navsim.common.dataclasses import SensorConfig
 from navsim.agents.drive_jepa_perception_based.drive_jepa_features import DriveJEPAFeatureBuilder, DriveJEPATargetBuilder 
-from torch.optim.lr_scheduler import CosineAnnealingLR, LambdaLR
-import math
-from .score_module.compute_b2d_score import compute_corners_torch
 from navsim.agents.transfuser.transfuser_loss import _agent_loss
 
 class DriveJEPAAgent(AbstractAgent):
@@ -53,28 +50,14 @@ class DriveJEPAAgent(AbstractAgent):
                     self.worker = SingleMachineParallelExecutor(use_process_pool=True, max_workers=16)
                 self.worker_map=worker_map
 
-            if config.b2d:
-                self.train_metric_cache_paths = load_feature_target_from_pickle(
-                    os.getenv("NAVSIM_EXP_ROOT") + "/B2d_cache/train_fut_boxes.gz")
-                self.test_metric_cache_paths = load_feature_target_from_pickle(
-                    os.getenv("NAVSIM_EXP_ROOT") + "/B2d_cache/val_fut_boxes.gz")
-                from .score_module.compute_b2d_score import get_scores
-                self.get_scores = get_scores
+            from .score_module.compute_navsim_score import get_scores
 
-                map_file =os.getenv("NAVSIM_EXP_ROOT") +"/map.pkl"
+            metric_cache = MetricCacheLoader(Path(os.getenv("NAVSIM_EXP_ROOT") + "/train_metric_cache"))
+            self.train_metric_cache_paths = metric_cache.metric_cache_paths
+            self.test_metric_cache_paths = metric_cache.metric_cache_paths
 
-                with open(map_file, 'rb') as f:
-                    self.map_infos = pickle.load(f)
-                self.cuda_map=False
-
-            else:
-                from .score_module.compute_navsim_score import get_scores
-
-                metric_cache = MetricCacheLoader(Path(os.getenv("NAVSIM_EXP_ROOT") + "/train_ipad_metric_cache"))
-                self.train_metric_cache_paths = metric_cache.metric_cache_paths
-                self.test_metric_cache_paths = metric_cache.metric_cache_paths
-
-                self.get_scores = get_scores
+            self.get_scores = get_scores
+        
         poses = np.load("./data/8192.npy")
         self.anchors = poses[:, 4::5]
 
@@ -125,113 +108,14 @@ class DriveJEPAAgent(AbstractAgent):
         target_trajectory = targets["trajectory"]
         proposals=proposals.detach()
 
-        if self.b2d:
-            data_points = []
-
-            lidar2worlds=targets["lidar2world"]
-
-            all_proposals = torch.cat([proposals, target_trajectory[:,None]], dim=1)
-
-            all_proposals_xy=all_proposals[:, :,:, :2]
-            all_proposals_heading=all_proposals[:, :,:, 2:]
-
-            all_pos = all_proposals_xy.reshape(len(target_trajectory),-1, 2)
-
-            mid_points = (all_pos.amax(1) + all_pos.amin(1)) / 2
-
-            dists = torch.linalg.norm(all_pos - mid_points[:,None], dim=-1).amax(1) + 5
-
-            xyz = torch.cat(
-                [mid_points[..., :2], torch.zeros_like(mid_points[..., :1]), torch.ones_like(mid_points[..., :1])], dim=-1)
-
-            xys = torch.einsum("nij,nj->ni", lidar2worlds, xyz)[:, :2]
-
-            vel=torch.cat([all_proposals_xy[:, :,:1], all_proposals_xy[:,:, 1:] - all_proposals_xy[:,:, :-1]],dim=2)/ 0.5
-
-            proposals_05 = torch.cat([all_proposals_xy + vel*0.5, all_proposals_heading], dim=-1)
-
-            proposals_1 = torch.cat([all_proposals_xy + vel*1, all_proposals_heading], dim=-1)
-
-            proposals_ttc = torch.stack([all_proposals, proposals_05,proposals_1], dim=3)
-
-            ego_corners_ttc = compute_corners_torch(proposals_ttc.reshape(-1, 3)).reshape(proposals_ttc.shape[0],proposals_ttc.shape[1], proposals_ttc.shape[2], proposals_ttc.shape[3],  4, 2)
-
-            ego_corners_center = torch.cat([ego_corners_ttc[:,:,:,0], all_proposals_xy[:, :, :, None]], dim=-2)
-
-            ego_corners_center_xyz = torch.cat(
-                [ego_corners_center, torch.zeros_like(ego_corners_center[..., :1]), torch.ones_like(ego_corners_center[..., :1])], dim=-1)
-
-            global_ego_corners_centers = torch.einsum("nij,nptkj->nptki", lidar2worlds, ego_corners_center_xyz)[..., :2]
-
-            accs = torch.linalg.norm(vel[:,:, 1:] - vel[:,:, :-1], dim=-1) / 0.5
-
-            turning_rate=torch.abs(torch.cat([all_proposals_heading[:, :,:1,0]-np.pi/2, all_proposals_heading[:,:, 1:,0]-all_proposals_heading[:,:, :-1,0]],dim=2)) / 0.5
-
-            comforts = (accs[:,:-1] < accs[:,-1:].max()).all(-1) & (turning_rate[:,:-1] < turning_rate[:,-1:].max()).all(-1)
-
-            if self.cuda_map==False:
-                for key, value in self.map_infos.items():
-                    self.map_infos[key] = torch.tensor(value).to(target_trajectory.device)
-                self.cuda_map=True
-
-            for token, town_name, proposal,target_traj, comfort, dist, xy,global_conners,local_corners in zip(targets["token"], targets["town_name"], proposals.cpu().numpy(),  target_trajectory.cpu().numpy(), comforts.cpu().numpy(), dists.cpu().numpy(), xys, global_ego_corners_centers,ego_corners_ttc.cpu().numpy()):
-                all_lane_points = self.map_infos[town_name[:6]]
-
-                dist_to_cur = torch.linalg.norm(all_lane_points[:,:2] - xy, dim=-1)
-
-                nearby_point = all_lane_points[dist_to_cur < dist]
-
-                lane_xy = nearby_point[:, :2]
-                lane_width = nearby_point[:, 2]
-                lane_id = nearby_point[:, -1]
-
-                dist_to_lane = torch.linalg.norm(global_conners[None] - lane_xy[:, None, None, None], dim=-1)
-
-                on_road = dist_to_lane < lane_width[:, None, None, None]
-
-                on_road_all = on_road.any(0).all(-1)
-
-                nearest_lane = torch.argmin(dist_to_lane - lane_width[:, None, None,None], dim=0)
-
-                nearest_lane_id=lane_id[nearest_lane]
-
-                center_nearest_lane_id=nearest_lane_id[:,:,-1]
-
-                nearest_road_id = torch.round(center_nearest_lane_id)
-
-                target_road_id = torch.unique(nearest_road_id[-1])
-
-                on_route_all = torch.isin(nearest_road_id, target_road_id)
-                # in_multiple_lanes: if
-                # - more than one drivable polygon contains at least one corner
-                # - no polygon contains all corners
-                corner_nearest_lane_id=nearest_lane_id[:,:,:-1]
-
-                batch_multiple_lanes_mask = (corner_nearest_lane_id!=corner_nearest_lane_id[:,:,:1]).any(-1)
-
-                on_road_all=on_road_all==on_road_all[-1:]
-                # on_road_all = on_road_all | ~on_road_all[-1:]# on road or groundtruth offroad
-
-                ego_areas=torch.stack([batch_multiple_lanes_mask,on_road_all,on_route_all],dim=-1)
-
-                data_dict = {
-                    "fut_box_corners": metric_cache_paths[token],
-                    "_ego_coords": local_corners,
-                    "target_traj": target_traj,
-                    "proposal":proposal,
-                    "comfort": comfort,
-                    "ego_areas": ego_areas.cpu().numpy(),
-                }
-                data_points.append(data_dict)
-        else:
-            data_points = [
-                {
-                    "token": metric_cache_paths[token],
-                    "poses": poses,
-                    "test": test
-                }
-                for token, poses in zip(targets["token"], proposals.cpu().numpy())
-            ]
+        data_points = [
+            {
+                "token": metric_cache_paths[token],
+                "poses": poses,
+                "test": test
+            }
+            for token, poses in zip(targets["token"], proposals.cpu().numpy())
+        ]
 
         if self.ray:
             all_res = self.worker_map(self.worker, self.get_scores, data_points)
@@ -444,49 +328,11 @@ class DriveJEPAAgent(AbstractAgent):
         return self.pad_loss(targets, pred, self._config)
 
     def get_optimizers(self):
-        # optimizer = torch.optim.Adam(self.parameters(), lr=self._lr)#,weight_decay= 1e-2
-        # self.lr_warmup_steps=500
-        # self.lr_total_steps=20000
-        # self.lr_min_ratio=1e-3
-
-        # def lr_lambda(current_step):
-        #     if current_step < self.lr_warmup_steps:
-        #         return (1.0 / 3) + (current_step / self.lr_warmup_steps) * (1 - 1.0 / 3)
-        #     return 1.0
-        #     # return self.lr_min_ratio + 0.5 * (1 - self.lr_min_ratio) * (
-        #     #     1.0
-        #     #     + math.cos(
-        #     #         math.pi
-        #     #         * min(
-        #     #             1.0,
-        #     #             (current_step - self.lr_warmup_steps)
-        #     #             / (self.lr_total_steps - self.lr_warmup_steps),
-        #     #         )
-        #     #     )
-        #     # )
-
-
-        # scheduler = {
-        #     'scheduler': LambdaLR(optimizer, lr_lambda),
-        #     'interval': 'step',  # Update every step
-        #     'frequency': 1
-        # }
-
-        # return {"optimizer": optimizer, "lr_scheduler": scheduler}
-        
         # Smaller lr for vjepa encoder
         return torch.optim.Adam([
             {'params': self._pad_model._backbone.parameters(), 'lr': 0.1 * self._lr},
             {'params': [p for n, p in self._pad_model.named_parameters() if 'backbone' not in n], 'lr': self._lr},
         ], lr=self._lr)
-        return torch.optim.Adam(self._pad_model.parameters(), lr=self._lr)#,weight_decay=1e-4
 
     def get_training_callbacks(self):
-
-        checkpoint_cb = ModelCheckpoint(save_top_k=20,
-                                        monitor='val/score_epoch',
-                                        filename='{epoch}-{step}',
-                                        mode="max"
-                                        )
-
         return []
