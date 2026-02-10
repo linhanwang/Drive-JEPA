@@ -77,6 +77,8 @@ Then download pretrained weights and cached data.
 huggingface-cli download LinhanWang/Drive-JEPA --repo-type dataset --local-dir $NAVSIM_EXP_ROOT/Drive-JEPA-cache
 ```
 
+After decompressing the tar files, please change the file paths in csv files under metric_cache/metadata and train_metric_cache/metadata.
+
 ## Environment preparation
 
 ```bash
