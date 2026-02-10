@@ -47,7 +47,7 @@ def before_score(metric_cache: MetricCache, poses):
 
 def get_sub_score( metric_cache_path,poses,test):
     metric_cache: MetricCache = load_metric_cache(metric_cache_path)
-    scores_index_path = str(metric_cache_path).replace('train_ipad_metric_cache', 'anchors_scores_index_v1')
+    scores_index_path = str(metric_cache_path).replace('train_ipad_metric_cache', 'anchors_scores_index')
     scores_index = np.load(scores_index_path + '.npy')
     simulated_states = before_score(metric_cache, poses)
 
