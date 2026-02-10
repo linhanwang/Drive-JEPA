@@ -3,7 +3,8 @@
   <h1 align="center">Drive-JEPA: Video JEPA Meets Multimodal Trajectory
 Distillation for End-to-End Driving</h1>
 
-[arxiv](https://arxiv.org/abs/2601.22032)
+[![arXiv](https://img.shields.io/badge/arXiv-2601.22032-b31b1b)](https://arxiv.org/abs/2601.22032)
+[![Drive-JEPA Data](https://img.shields.io/badge/huggingface-Drive--JEPA-orange?logo=huggingface&logoColor=white)](https://huggingface.co/datasets/LinhanWang/Drive-JEPA)
 
 
 </div>
