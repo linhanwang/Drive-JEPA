@@ -102,6 +102,7 @@ bash scripts/training/run_drive_jepa_perception_based_cache.sh
 
 ## Training
 
+We tested training on two L40S/A30/V100 GPUs.
 ```bash
 bash scripts/training/train_drive_jepa_perception_based.sh
 # Or bash scripts/training/train_drive_jepa_perception_free.sh
